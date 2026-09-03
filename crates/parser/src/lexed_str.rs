@@ -566,6 +566,10 @@ fn err_to_msg(error: EscapeError, mode: Mode) -> String {
 #[cfg(test)]
 mod tests {
     use super::LexedStr;
+    use proptest::collection::vec;
+    use proptest::prelude::{Just, any, proptest};
+    use proptest::prop_oneof;
+    use proptest::strategy::Strategy;
 
     #[test]
     fn validate_frontmatter_test() {
@@ -622,5 +626,41 @@ mod tests {
             vec!["extra characters after frontmatter close are not allowed".to_owned()]
         );
         assert!(!is_unclosed);
+    }
+
+    fn frontmatter_gen_strategy() -> impl Strategy<Value = &'static str> {
+        prop_oneof![
+            Just(""),
+            Just("fn main(){}"),
+            Just("[dependencies]"),
+            Just("a=1"),
+            Just("x"),
+            Just("1"),
+            Just("&"),
+            Just("<"),
+            Just(">"),
+            Just("{"),
+            Just("}"),
+            Just("\u{0301}"),
+            Just(" "),
+            Just("\t"),
+            Just("\n"),
+            Just("\r\n"),
+            Just("-"),
+            Just("--"),
+            Just("---"),
+            Just("----"),
+            Just("-----"),
+        ]
+    }
+
+    proptest! {
+        // Frontmatter validator panic test.
+        #[test]
+        fn validate_frontmatter_boundaries(text in vec(frontmatter_gen_strategy(), 0..100)
+            .prop_map(|s| s.into_iter().collect::<String>()),
+            bool1 in any::<bool>(), bool2 in any::<bool>()) {
+            let (_, _) = LexedStr::validate_frontmatter(bool1, bool2, text.as_str());
+        }
     }
 }
